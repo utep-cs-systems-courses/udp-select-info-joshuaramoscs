@@ -45,14 +45,13 @@ writeSockFunc = {}              # ready for writing
 errorSockFunc = {}              # broken
 
 # function to call when upperServerSocket is ready for reading
-#readSockFunc[upperServerSocket] = uppercase
-#readSockFunc[lowerServerSocket] = lowercase
+readSockFunc[upperServerSocket] = uppercase
+readSockFunc[lowerServerSocket] = lowercase
 
 
 print("ready to receive")
 timeout = 5                     # select delay before giving up, in seconds
 while 1:
-    readSockFunc[upperServerSocket] = uppercase
     readRdySet, writeRdySet, errorRdySet = select(list(readSockFunc.keys()),
                                                   list(writeSockFunc.keys()),
                                                   list(errorSockFunc.keys()),
@@ -64,8 +63,6 @@ while 1:
         print("in Loop")
         readSockFunc[sock](sock)
 
-
-    readSockFunc[lowerServerSocket] = lowercase
     readRdySet, writeRdySet, errorRdySet = select(list(readSockFunc.keys()),
                                                   list(writeSockFunc.keys()),
                                                   list(errorSockFunc.keys()),
