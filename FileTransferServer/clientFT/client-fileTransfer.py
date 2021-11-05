@@ -17,7 +17,8 @@ try:
             serverAddr = (addr, int(port)) # addr can be a string (yippie)
         else:
             print("unexpected parameter %s" % args[0])
-            usage();
+            print("usage: %s [--serverAddr host:port]" % sys.argv[0])
+            sys.exit(1)
 except:
     print("usage: %s [--serverAddr host:port]" % sys.argv[0])
     sys.exit(1)
@@ -34,14 +35,17 @@ try:
     with open(filename, "rb") as f:  # "rb" ==  read in byte mode
         # Send filename
         clientSocket.sendto(filename.encode(), serverAddr)
-        print('Message from %s is "%s"' % (repr(serverAddrPort), confirmation.decode())
+        confirmation, serverAddrPort = clientSocket.recvfrom(2048)
+        print('Message from %s is "%s"' % (repr(serverAddrPort), confirmation.decode()))
+
         # Send file content
-        byte = f.read(2048)          # read 2048 bytes at a time
+        byte = f.read(100)          # read 100 bytes at a time
         while byte:                  # while byte is not empty, send to server
             clientSocket.sendto(byte, serverAddr)
             confirmation, serverAddrPort = clientSocket.recvfrom(2048)
-            print('Message from %s is "%s"' % (repr(serverAddrPort), confirmation.decode())
-            byte = f.read(2048)
-            
+            print('Message from %s is "%s"' % (repr(serverAddrPort), confirmation.decode()))
+            byte = f.read(100)
+        clientSocket.sendto(byte, serverAddr)
+
 except IOError:
     print('Could not read file %s' % filename)
