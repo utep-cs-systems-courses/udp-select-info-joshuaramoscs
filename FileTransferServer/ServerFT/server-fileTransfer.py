@@ -1,26 +1,25 @@
 #! /usr/bin/env python3
-# udp demo -- simple select-driven uppercase server
-
-# Eric Freudenthal with mods by Adrian Veliz
+# A file transfer server
 
 import sys
-import os.path
-import time
 from socket import *
 from select import select
+import os.path
+import time
 
 # Addresses and Ports
-fileTransferServerAddr = ("", 50000)   # any addr, port 50,000
-
+fileTransferPort = ("", 50000)   # any addr, port 50,000
 
 # Run this function when sock has rec'd first message
 def recvFileName(sock):
     message, clientAddrPort = sock.recvfrom(2048)
-    print("from %s: rec'd file name" % (repr(clientAddrPort)))
-    filename = message.decode()
+    print("Message from %s: rec'd: " % (repr(clientAddrPort)), message)
+    filesize = message[4]
+    filename = message[5:len(message)]
     if os.path.exists(filename): # Reject if file exists
         sock.sendto("File not sent. File already exists.".encode(), clientAddrPort)
     else:                        # Create file and call recvMsg()
+        print("File size is: %s bytes long" % filesize)
         f = open(filename, "w")
         f.write("")
         f.close()
@@ -35,19 +34,18 @@ def recvFileName(sock):
 # Run this function after creating a new file.
 def recvMsg(sock, filename):
     message2, clientAddrPort = sock.recvfrom(2048)
-    print("from %s: rec'd message" % (repr(clientAddrPort)))
     if len(message2) == 0: # If we reached eof
         return False
-
+    print("Message #%d from %s: %d bytes" % (message2[0], (repr(clientAddrPort)), len(message2)))
     f = open(filename, "ab")
-    f.write(message2)
+    f.write(message2[len(filename)+1:])
     f.close()
     sock.sendto(("rec'd %d bytes" % len(message2)).encode(), clientAddrPort)
     return True
 
-# Listening to fileTransferServerAddr
+# Listening to fileTransferPort
 fileTransferServerSocket = socket(AF_INET, SOCK_DGRAM)
-fileTransferServerSocket.bind(fileTransferServerAddr)
+fileTransferServerSocket.bind(fileTransferPort)
 fileTransferServerSocket.setblocking(False)
 
 
@@ -59,8 +57,8 @@ errorSockFunc = {}              # broken
 # function to call when fileTransferServerSocket is ready for reading
 readSockFunc[fileTransferServerSocket] = recvFileName
 
-
-print("ready to receive")
+print("SERVER RUNNING\nListening to port: %s" % repr(fileTransferPort))
+print("*******************************\nReady to receive")
 timeout = 5                     # select delay before giving up, in seconds
 while 1:
     readRdySet, writeRdySet, errorRdySet = select(list(readSockFunc.keys()),

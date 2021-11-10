@@ -1,13 +1,15 @@
 #! /usr//bin/env python3
-# File transfer client.  Modified from Kurose/Ross by Eric Freudenthal 2016
+# A file transfer client
 
-from socket import *
 import sys, re
+from socket import *
+from select import select
+import os.path
 
-# default params
+# Addresses and Ports: default params
 serverAddr = ('localhost', 50000)
 
-# server select code, could probably delete
+# server select code (needs to be implemented)
 try:
     args = sys.argv[1:]
     while args:
@@ -24,28 +26,40 @@ except:
     sys.exit(1)
 
 
-# File transfer protocol
-print("serverAddr = %s" % repr(serverAddr))
-clientSocket = socket(AF_INET, SOCK_DGRAM)
+# FILE TRANSFER PROTOCOL
+NEW_FILE_BYTES = 4  # Number of consecutive 0 bytes to indicate a new file
 
-print("Input file name with extension:")
+print("CLIENT RUNNING\nConnecting to serverAddr: %s" % repr(serverAddr))
+clientSocket = socket(AF_INET, SOCK_DGRAM)
+print("*******************************\nInput file name with extension:")
 filename = sys.stdin.readline()[:-1] # delete final \n
 
 try:
     with open(filename, "rb") as f:  # "rb" ==  read in byte mode
-        # Send filename
-        clientSocket.sendto(filename.encode(), serverAddr)
+        # Send 4 bytes of zeroes, file size, and filename
+        # \x00\x00\x00\x00[file size][filename]
+        filesize = os.path.getsize(filename)
+        message = bytearray(NEW_FILE_BYTES)
+        message.append(filesize)
+        message.extend(filename.encode())
+        clientSocket.sendto(message, serverAddr)
         confirmation, serverAddrPort = clientSocket.recvfrom(2048)
         print('Message from %s is "%s"' % (repr(serverAddrPort), confirmation.decode()))
 
         # Send file content
+        # FILE CONTENT: [sequenceNum][filename][file content]
+        sequenceNum = 0
         byte = f.read(100)          # read 100 bytes at a time
         while byte:                  # while byte is not empty, send to server
-            clientSocket.sendto(byte, serverAddr)
+            message = bytearray([sequenceNum])
+            message.extend(filename.encode())
+            message.extend(byte)
+            clientSocket.sendto(message, serverAddr)
             confirmation, serverAddrPort = clientSocket.recvfrom(2048)
             print('Message from %s is "%s"' % (repr(serverAddrPort), confirmation.decode()))
             byte = f.read(100)
+            sequenceNum += 1
         clientSocket.sendto(byte, serverAddr)
 
 except IOError:
-    print('Could not read file %s' % filename)
+    print('Could not read/send file: %s' % filename)
