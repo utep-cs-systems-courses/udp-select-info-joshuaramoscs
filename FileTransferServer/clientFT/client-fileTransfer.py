@@ -40,8 +40,8 @@ try:
         # \x00\x00\x00\x00[file size][filename]
         filesize = os.path.getsize(filename)
         message = bytearray(NEW_FILE_BYTES)
-        message.append(filesize)
         message.extend(filename.encode())
+        message.append(filesize)
         clientSocket.sendto(message, serverAddr)
         confirmation, serverAddrPort = clientSocket.recvfrom(2048)
         print('Message from %s is "%s"' % (repr(serverAddrPort), confirmation.decode()))
@@ -51,8 +51,9 @@ try:
         sequenceNum = 0
         byte = f.read(100)          # read 100 bytes at a time
         while byte:                  # while byte is not empty, send to server
-            message = bytearray([sequenceNum])
+            message = bytearray()
             message.extend(filename.encode())
+            message.append(sequenceNum)
             message.extend(byte)
             clientSocket.sendto(message, serverAddr)
             confirmation, serverAddrPort = clientSocket.recvfrom(2048)
