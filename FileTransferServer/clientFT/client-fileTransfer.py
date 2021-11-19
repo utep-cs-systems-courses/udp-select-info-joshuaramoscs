@@ -5,10 +5,12 @@ import sys, re
 from socket import *
 from select import select
 import os.path
+import time
 
 # Addresses and Ports: default params
 serverAddr = ('localhost', 50000)
-
+sentTime = 0
+recvTime = 0
 def newFileTransfer():
     print("CLIENT RUNNING\nConnected to serverAddr: %s" % repr(serverAddr))
     print("*******************************\nInput file name with extension:")
@@ -17,6 +19,7 @@ def newFileTransfer():
         # Send 4 bytes of zeroes, file size, and filename
         # \x00\x00\x00\x00[filename][file size]
         filesize = os.path.getsize(filename)
+        print(filesize)
         message = bytearray(4)
         message.extend(filename.encode())
         message.append(filesize)
@@ -43,9 +46,12 @@ def sendFile(sock):
                 message.extend(filename.encode())
                 message.append(sequenceNum)
                 message.extend(byte)
+                sentTime = time.time()
                 clientSocket.sendto(message, serverAddr)
                 confirmation, serverAddrPort = clientSocket.recvfrom(2048)
+                recvTime = time.time()
                 print('Message from %s is "%s"' % (repr(serverAddrPort), confirmation.decode()))
+                print('RTT: ',(1000*(recvTime - sentTime)), 'ms.')
                 byte = f.read(100)
                 sequenceNum += 1
             clientSocket.sendto(byte, serverAddr)
