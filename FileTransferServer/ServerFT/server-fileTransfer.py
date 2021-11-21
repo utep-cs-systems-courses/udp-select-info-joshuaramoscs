@@ -15,43 +15,44 @@ filesInTransit = {}
 # Determines if msg is a new file name or file content
 def recvMsg(sock):
     message, clientAddrPort = sock.recvfrom(2048)
-    # print("Message from %s: rec'd: " % (repr(clientAddrPort)), message)
-    if message[0:4] == b'\x00\x00\x00\x00':  # Check if its a new file
-        recvFileName(sock, message[4:], clientAddrPort)
-    else:  # Else, check if msg belongs to file in transit, let client time out if not
-        filenameSet = list(filesInTransit)
-        for fn in filenameSet:
-            if message[0:len(fn)] == fn:
-                recvFileContent(sock, fn, message[len(fn):], clientAddrPort)  # receive file content
-            break
-
+    # message = [File name length][Filename][Sequence # length][Sequence #0][File Length/File content]
+    #print("Message from %s: rec'd: " % (repr(clientAddrPort)), message)
+    if len(message) > 0:
+        filename = message[1: message[0]+1]
+        message = message[message[0]+1:]
+        sequenceNum = message[1: message[0]+1]
+        message = message[message[0]+1:]
+        if int.from_bytes(sequenceNum, "big") == 0:
+            recvFileName(sock, clientAddrPort, filename, sequenceNum, message)
+        else:
+            recvFileContent(sock, clientAddrPort, filename, sequenceNum, message)
+    else:
+        print("EOF")
 
 # Run this function when sock has rec'd a new file message
-def recvFileName(sock, message, clientAddrPort):
-    filename = message[0:len(message) - 1]
-    filesize = message[len(message) - 1]
+def recvFileName(sock, clientAddrPort, filename, sequenceNum, fileSize):
     if os.path.exists(filename):  # Reject if file exists
         sock.sendto("File not sent. File already exists.".encode(), clientAddrPort)
     else:  # Create file
-        print("File Name: %s, File size is: %s bytes long" % (filename.decode(), filesize))
+        print("From %s: Message #%d, File Name: %s, File size: %d bytes" % (repr(clientAddrPort), int.from_bytes(sequenceNum, "big"), filename.decode(), int.from_bytes(fileSize, "big")))
         f = open(filename, "w")
         f.write("")
         f.close()
-        filesInTransit[filename] = filesize  # add to dictionary of files in transit
+        filesInTransit[filename] = fileSize  # add to dictionary of files in transit
         sock.sendto("rec'd file name".encode(), clientAddrPort)
 
 
 # Run this function after creating a new file.
-def recvFileContent(sock, filename, message, clientAddrPort):
-    if len(message) == 0:  # If we reached eof
+def recvFileContent(sock, clientAddrPort, filename, sequenceNum, message):
+    if len(message) == 0:  # If we reached eof                MOVE OR FIX THIS
         del filesInTransit[filename]
         sock.sendto(("rec'd %d bytes" % len(message)).encode(), clientAddrPort)
     else:
-        print("Message #%d from %s: %d bytes" % (message[0], (repr(clientAddrPort)), len(message) - 1))
+        print("From %s: Message #%d, %d bytes" % (repr(clientAddrPort), int.from_bytes(sequenceNum, "big"), len(message)))
         f = open(filename, "ab")
-        f.write(message[1:])
+        f.write(message)
         f.close()
-        sock.sendto(("rec'd %d bytes" % (len(message) - 1)).encode(), clientAddrPort)
+        sock.sendto(("rec'd %d bytes" % (len(message))).encode(), clientAddrPort)
 
 
 # Listening to fileTransferPort
