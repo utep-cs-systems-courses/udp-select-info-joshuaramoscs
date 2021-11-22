@@ -15,7 +15,7 @@ filesInTransit = {}
 def recvMsg(sock):
     # message: [File name length][Filename][Sequence # length][Sequence #0][File Length/File content]
     message, clientAddrPort = sock.recvfrom(2048)
-    print("Message from %s: rec'd: " % (repr(clientAddrPort)), message)
+    #print("Message from %s: rec'd: " % (repr(clientAddrPort)), message)
     filename = message[1: message[0] + 1]
     message = message[message[0] + 1:]
     sequenceNum = message[1: message[0] + 1]
@@ -80,6 +80,7 @@ def wFileContent(sock, clientAddrPort, filename, sequenceNum, message):
 def sendAck(sequenceNum, ackCode, ackMsg, clientAddrPort):
     # message: [Sequence Number][Success/Error Code][Message]
     sock.sendto(sequenceNum + ackCode.to_bytes(1, "big") + bytearray(ackMsg, 'utf-8'), clientAddrPort)
+    #print("\t\t\t\t\t\t\tAck'ed msg #%d" % int.from_bytes(sequenceNum, "big"))
 
 
 # Listening to fileTransferPort

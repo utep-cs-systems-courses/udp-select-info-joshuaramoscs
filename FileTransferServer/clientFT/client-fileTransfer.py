@@ -9,6 +9,7 @@ import time
 
 # Addresses and Ports: default params
 serverAddr = ('localhost', 50000)
+windowSize = 4
 
 # File info
 f = ""
@@ -17,7 +18,7 @@ filename = ""
 fileSize = 0
 seqByteLen = 1
 sequenceNum = 0
-
+sendHist = {}
 
 # Client service info
 sentTime = 0
@@ -34,9 +35,10 @@ def recvAck():
     ackMessage = ackMessage[seqByteLen+1:]
     print('From %s: Sequence: %d, Message: "%s", RTT: %.4f ms.' % ((serverAddrPort), int.from_bytes(ackSeqNum, "big"), ackMessage.decode(), (1000 * (recvTime - sentTime))))
     if ackCode == 0: # Send next message
-        byte = f.read(100)
-        sequenceNum += 1
-        sendFile()
+        if len(byte) != 0:
+            byte = f.read(100)
+            sequenceNum += 1
+            sendFile()
     elif ackCode == 1:  # Error, resend previous message
         if int.from_bytes(ackSeqNum, "big") == 0:
             print("Already sent this file")
@@ -56,15 +58,17 @@ def sendFile():
                   seqByteLen.to_bytes(1, "big") + sequenceNum.to_bytes(seqByteLen, "big") + byte
         sentTime = time.time()
         clientSocket.sendto(message, serverAddr)
+        print("Sent Msg: #%d" % sequenceNum)
     except IOError:
         print('Error reading %s' % filename)
 
 
 # Function to call when initiating file transfer
 def initFileTransfer():
-    global f, fileSize, seqByteLen
+    global f, byte, fileSize, seqByteLen, sequenceNum
     print("CLIENT RUNNING\nConnecting to serverAddr: %s" % repr(serverAddr))
     reqFileName()
+    # Send first four messages
     try:
         f = open(filename, "rb")
         fileSize = os.path.getsize(filename)
@@ -75,7 +79,13 @@ def initFileTransfer():
         message = len(filename).to_bytes(1, "big") + bytearray(filename, 'utf-8') + \
                   seqByteLen.to_bytes(1, "big") + sequenceNum.to_bytes(seqByteLen, "big") + \
                   fileSize.to_bytes(seqByteLen, "big")
+        sendHist[sequenceNum] = message
         clientSocket.sendto(message, serverAddr)
+        print("Sent Msg: #%d" % sequenceNum)
+        for i in range(0, windowSize-1):
+            byte = f.read(100)
+            sequenceNum += 1
+            sendFile()
     except IOError:
         print('File %s is not in directory' % filename)
 
