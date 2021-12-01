@@ -6,7 +6,7 @@ from select import select
 import os.path
 
 # Addresses and Ports
-fileTransferPort = ("", 50000)  # any addr, port 50,000
+fileTransferPort = ("", 50001)  # any addr, port 50,000
 # Dictionary of all files in transit
 filesInTransit = {}
 
