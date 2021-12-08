@@ -47,6 +47,7 @@ def recvAck():
             takeNewStart = True
             sendFile()
     elif int.from_bytes(ackSeqNum, "big") < sequenceNum:              # Error, resend previous message
+        print("Ack was for an older message, resending current message.")
         sequenceNum = int.from_bytes(ackSeqNum, "big") + 1
         takeNewStart = False
         timeout *= 2

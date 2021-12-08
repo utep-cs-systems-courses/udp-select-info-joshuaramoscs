@@ -39,7 +39,6 @@ def wFileContent(sock, clientAddrPort, filename, seqByteLen, sequenceNum, messag
             ackMsg = "Error: File %s already exists." % filename.decode()
         else:                                                                  # Create file
             print("From %s: New File Transfer" % repr(clientAddrPort))
-            # lastSequenceNum = 0
             ackMsg = "Rec'd file name %s & file size %d bytes." % (filename.decode(), int.from_bytes(message, "big"))
         lastSequenceNum = 0
         sock.sendto(lastSequenceNum.to_bytes(seqByteLen, "big") + bytearray(ackMsg, 'utf-8'), clientAddrPort)
@@ -58,8 +57,9 @@ def wFileContent(sock, clientAddrPort, filename, seqByteLen, sequenceNum, messag
             except IOError:
                 print("Error writing to file %s from wFileContent()." % filename.decode())
         else:                                                                   # Resend ack for last correct sequence
-            sock.sendto(lastSequenceNum.to_bytes(seqByteLen, "big") + bytearray(ackMsg, 'utf-8'), clientAddrPort)
-            print("\t\t\t\t\t\t\tAck'ed msg #%d" % int.from_bytes(sequenceNum, "big"))
+            if lastSequenceNum >= 0:
+                sock.sendto(lastSequenceNum.to_bytes(seqByteLen, "big") + bytearray(ackMsg, 'utf-8'), clientAddrPort)
+                print("\t\t\t\t\t\t\tAck'ed msg #%d" % int.from_bytes(sequenceNum, "big"))
 
 
 # Listening to fileTransferPort
