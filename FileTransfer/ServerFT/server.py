@@ -7,80 +7,59 @@ import os.path
 
 # Addresses and Ports
 fileTransferPort = ("", 50001)  # any addr, port 50,000
-# Dictionary of all files in transit
-filesInTransit = {}
+lastSequenceNum = -1
 
 
 # Run this function when receiving a message
 def recvMsg(sock):
+    global lastSequenceNum
     # message: [File name length][Filename][Sequence # length][Sequence #0][File Length/File content]
     message, clientAddrPort = sock.recvfrom(2048)
-    #print("Message from %s: rec'd: " % (repr(clientAddrPort)), message)
+    # print("Message from %s: rec'd: " % (repr(clientAddrPort)), message)
     filename = message[1: message[0] + 1]
     message = message[message[0] + 1:]
-    sequenceNum = message[1: message[0] + 1]
-    message = message[message[0] + 1:]
-    # Check for EOF
-    if len(message) > 0:
-        # Determines if msg is a new file name or is file content
-        if int.from_bytes(sequenceNum, "big") == 0:
-            wFileName(sock, clientAddrPort, filename, sequenceNum, message)
-        else:
-            wFileContent(sock, clientAddrPort, filename, sequenceNum, message)
-    else: # EOF
+    seqByteLen = message[0]
+    sequenceNum = message[1: seqByteLen+1]
+    message = message[seqByteLen + 1:]
+    if len(message) > 0:                                # Check if not EOF
+        wFileContent(sock, clientAddrPort, filename, seqByteLen, sequenceNum, message)
+    else:                                               # EOF
         print("Reached EOF of %s." % filename.decode())
-        del filesInTransit[filename, clientAddrPort]
-        ackCode = 2  # 2 == EOF
         ackMsg = "Rec'd EOF of %s." % filename.decode()
-        sendAck(sequenceNum, ackCode, ackMsg, clientAddrPort)
-
-
-# Run this function when sock has rec'd a new file message
-def wFileName(sock, clientAddrPort, filename, sequenceNum, fileSize):
-    if os.path.exists(filename):  # Reject if file exists
-        ackCode = 1  # 1 == error
-        ackMsg = "Error: File %s already exists." % filename.decode()
-    else:  # Create file
-        try:
-            print("From %s: Message #%d, File Name: %s, File size: %d bytes" % (repr(clientAddrPort), int.from_bytes(sequenceNum, "big"), filename.decode(), int.from_bytes(fileSize, "big")))
-            f = open(filename, "w")
-            f.write("")
-            f.close()
-            filesInTransit[filename, clientAddrPort] = fileSize  # add to dictionary of files in transit
-            ackCode = 0  # 0 == success
-            ackMsg = "Rec'd file name %s." % filename.decode()
-        except IOError:
-            print("Error writing to file %s from wFileName()." % filename.decode())
-            ackCode = 1  # 1 == error
-            ackMsg = "Error: Could not create file %s." % filename.decode()
-    sendAck(sequenceNum, ackCode, ackMsg, clientAddrPort)
+        sock.sendto(sequenceNum + bytearray(ackMsg, 'utf-8'), clientAddrPort)  # message: [Sequence Number][Message]
+        print("\t\t\t\t\t\t\tAck'ed msg #%d" % int.from_bytes(sequenceNum, "big"))
+        lastSequenceNum = -1
 
 
 # Run this function when sock has rec'd file content
-def wFileContent(sock, clientAddrPort, filename, sequenceNum, message):
-    # Check if file is in dictionary
-    if (filename, clientAddrPort) in filesInTransit.keys():
-        try:
-            print("From %s: Message #%d, %d bytes" % (repr(clientAddrPort), int.from_bytes(sequenceNum, "big"), len(message)))
-            f = open(filename, "ab")
-            f.write(message)
-            f.close()
-            ackCode = 0  # 0 == success
-            ackMsg = "Rec'd %s, %d bytes" % (filename.decode(), len(message))
-        except IOError:
-            print("Error writing to file %s from wFileContent()." % filename.decode())
-            ackCode = 1  # 1 == error
-            ackMsg = "Error: Could not write file %s." % filename.decode()
-    else:
-        ackCode = 1  # 1 == error
-        ackMsg = "Error: Unknown file name %s." % filename.decode()
-    sendAck(sequenceNum, ackCode, ackMsg, clientAddrPort)
-
-
-def sendAck(sequenceNum, ackCode, ackMsg, clientAddrPort):
-    # message: [Sequence Number][Success/Error Code][Message]
-    sock.sendto(sequenceNum + ackCode.to_bytes(1, "big") + bytearray(ackMsg, 'utf-8'), clientAddrPort)
-    #print("\t\t\t\t\t\t\tAck'ed msg #%d" % int.from_bytes(sequenceNum, "big"))
+def wFileContent(sock, clientAddrPort, filename, seqByteLen, sequenceNum, message):
+    global lastSequenceNum
+    if int.from_bytes(sequenceNum, "big") == 0:                                # If new file
+        if os.path.exists(filename):                                           # Reject if file exists
+            ackMsg = "Error: File %s already exists." % filename.decode()
+        else:                                                                  # Create file
+            print("From %s: New File Transfer" % repr(clientAddrPort))
+            # lastSequenceNum = 0
+            ackMsg = "Rec'd file name %s & file size %d bytes." % (filename.decode(), int.from_bytes(message, "big"))
+        lastSequenceNum = 0
+        sock.sendto(lastSequenceNum.to_bytes(seqByteLen, "big") + bytearray(ackMsg, 'utf-8'), clientAddrPort)
+        print("\t\t\t\t\t\t\tAck'ed msg #%d" % int.from_bytes(sequenceNum, "big"))
+    else:                                                                      # If file content
+        print("From %s: Message #%d, %d bytes" % (repr(clientAddrPort), int.from_bytes(sequenceNum, "big"), len(message)))
+        ackMsg = "Rec'd %s, %d bytes" % (filename.decode(), len(message))
+        if int.from_bytes(sequenceNum, "big") == lastSequenceNum + 1:          # If sequence num is the correct one
+            try:
+                f = open(filename, "ab+")
+                f.write(message)
+                f.close()
+                sock.sendto(sequenceNum + bytearray(ackMsg, 'utf-8'), clientAddrPort)
+                print("\t\t\t\t\t\t\tAck'ed msg #%d" % int.from_bytes(sequenceNum, "big"))
+                lastSequenceNum += 1
+            except IOError:
+                print("Error writing to file %s from wFileContent()." % filename.decode())
+        else:                                                                   # Resend ack for last correct sequence
+            sock.sendto(lastSequenceNum.to_bytes(seqByteLen, "big") + bytearray(ackMsg, 'utf-8'), clientAddrPort)
+            print("\t\t\t\t\t\t\tAck'ed msg #%d" % int.from_bytes(sequenceNum, "big"))
 
 
 # Listening to fileTransferPort
@@ -107,5 +86,6 @@ while 1:
 
     if not readRdySet and not writeRdySet and not errorRdySet:
         print("timeout: no events")
+        lastSequenceNum = -1
     for sock in readRdySet:
         readSockFunc[sock](sock)
